@@ -68,15 +68,7 @@ def main(argv: list[str] | None = None) -> None:
     while not _port_free(host, port) and port < 65000:
         port += 1
 
-    # Portable mode: pull in data/models from older installs, and fix auto-start if the folder moved.
-    try:
-        from . import migrate
-
-        if migrate.needed():
-            print("Moving data and models into the app folder...", flush=True)
-            migrate.run()
-    except Exception as exc:
-        print(f"Migration skipped: {exc}", flush=True)
+    # If the folder was moved or copied, point start-with-Windows at this copy.
     autostart.refresh()
 
     local_url = f"http://127.0.0.1:{port}/"

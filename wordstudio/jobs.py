@@ -14,6 +14,7 @@ import uuid
 from pathlib import Path
 
 from .config import DB_PATH, JOBS_DIR, LOG_DIR
+from .runtime import needs_preview
 
 # Overall progress ranges for each stage.
 _STAGES_PLAIN = {"audio": (0, 3), "model": (3, 10), "transcribe": (10, 78), "align": (78, 97), "finalize": (97, 100)}
@@ -100,7 +101,8 @@ class JobManager:
         # Media always lives in <data>/jobs/<id>/; resolve it there so a moved/copied app folder keeps working.
         if d.get("input_path"):
             d["input_path"] = str(JOBS_DIR / d["id"] / re.split(r"[\\/]", d["input_path"])[-1])
-        d["has_preview"] = (JOBS_DIR / d["id"] / "preview.wav").exists()
+        # True when playback uses an audio-only copy instead of the original file.
+        d["has_preview"] = needs_preview(Path(d.get("input_path") or "x.wav"))
         d["edited"] = _is_edited(d["id"])
         return d
 

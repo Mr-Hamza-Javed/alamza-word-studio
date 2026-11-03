@@ -40,19 +40,6 @@ First setup needs internet. After that everything works offline.
 
 Copy the whole folder (USB, network, ZIP) and double-click **`Alamza Word Studio.cmd`**. Nothing is downloaded or installed. To add Start Menu / Desktop shortcuts there, right-click the tray icon → **Add Start Menu and Desktop shortcuts** (or Settings → General).
 
-### Upgrading from the first (non-portable) version
-
-Put the new files into your existing app folder (`git pull`, or extract the new ZIP over it) and run **`install.bat`** once. It **moves** everything you already have into the folder, so nothing is downloaded again and no space is wasted:
-
-- installed packages from `.venv` → `runtime\python` (the old `.venv` is removed),
-- downloaded models from `%USERPROFILE%\.cache\huggingface` and the aligner from `.cache\torch` → `models\`,
-- transcripts and settings from `%LOCALAPPDATA%\AlamzaWordStudio` → `data\`,
-- old auto-exports from `Documents\Alamza Word Studio` → `exports\`,
-- pip's download cache (~1 GB of duplicate installers) is cleared,
-- shortcuts and start-with-Windows are updated to the new location.
-
-Only this app's files are moved; other programs' models stay where they are.
-
 **Update:** run `update.bat`. **Remove:** run `uninstall.bat` (removes shortcuts), then delete the folder.
 
 ## Which model should I use?

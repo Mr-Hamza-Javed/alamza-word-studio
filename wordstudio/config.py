@@ -34,10 +34,6 @@ HF_HOME = MODELS_DIR / "huggingface"
 TORCH_HOME = MODELS_DIR / "torch"
 NLTK_DIR = MODELS_DIR / "nltk_data"
 
-# Where things were stored before the app became portable (used by migrate.py).
-LEGACY_ENV = {k: os.environ.get(k) for k in ("HF_HOME", "HF_HUB_CACHE", "HUGGINGFACE_HUB_CACHE", "TORCH_HOME",
-                                             "NLTK_DATA", "XDG_CACHE_HOME", "LOCALAPPDATA", "APPDATA")}
-
 # Point every library's download cache into the app folder. This must happen before
 # huggingface_hub / torch / nltk are imported, and child processes inherit it.
 os.environ["HF_HOME"] = str(HF_HOME)

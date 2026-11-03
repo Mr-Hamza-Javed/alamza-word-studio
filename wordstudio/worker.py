@@ -15,7 +15,6 @@ import traceback
 import wave
 from pathlib import Path
 
-BROWSER_SAFE_EXT = {".mp3", ".wav", ".m4a", ".mp4", ".m4v", ".webm", ".ogg", ".oga", ".opus", ".flac", ".aac", ".mov"}
 SAMPLE_RATE = 16000
 _PROGRESS_RE = re.compile(r"Progress:\s*([\d.]+)%")
 _TQDM_RE = re.compile(r"(\d{1,3})%\|")
@@ -213,8 +212,11 @@ class Engine:
         duration = len(audio) / SAMPLE_RATE
         self.emit({"type": "meta", "duration": duration})
         _write_peaks(audio, job_dir / "peaks.json", np)
-        if src.suffix.lower() not in BROWSER_SAFE_EXT:
-            _write_wav(audio, job_dir / "preview.wav", np)
+        from .runtime import find_preview, make_preview, needs_preview
+
+        if needs_preview(src) and not find_preview(job_dir):
+            if not make_preview(src, job_dir):
+                _write_wav(audio, job_dir / "preview.wav", np)
         timings["audio"] = time.time() - t0
 
         # 2. model

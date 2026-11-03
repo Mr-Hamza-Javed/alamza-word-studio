@@ -46,6 +46,41 @@ def ensure_ffmpeg() -> str | None:
         return None
 
 
+# Formats the browser can seek in exactly. Others (notably MP3 and raw AAC) report the wrong
+# playback position after seeking, by up to a few seconds, which breaks word highlighting.
+EXACT_SEEK_EXT = {".wav", ".flac", ".m4a", ".mp4", ".m4v", ".mov", ".webm", ".ogg", ".oga", ".opus"}
+PREVIEW_NAMES = ("preview.m4a", "preview.wav")
+
+
+def needs_preview(src: Path) -> bool:
+    return Path(src).suffix.lower() not in EXACT_SEEK_EXT
+
+
+def find_preview(job_dir: Path) -> Path | None:
+    for name in PREVIEW_NAMES:
+        p = Path(job_dir) / name
+        if p.exists() and p.stat().st_size > 0:
+            return p
+    return None
+
+
+def make_preview(src: Path, job_dir: Path) -> Path | None:
+    """Make an accurately seekable audio copy (AAC in M4A) for playback in the browser."""
+    ffmpeg = ensure_ffmpeg() or "ffmpeg"
+    dest = Path(job_dir) / "preview.m4a"
+    tmp = Path(job_dir) / "preview.tmp.m4a"
+    cmd = [ffmpeg, "-y", "-v", "error", "-i", str(src), "-vn", "-map", "0:a:0", "-ac", "1", "-c:a", "aac",
+           "-b:a", "96k", "-movflags", "+faststart", str(tmp)]
+    try:
+        subprocess.run(cmd, check=True, capture_output=True,
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        tmp.replace(dest)
+        return dest
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        return None
+
+
 def _cpu_name() -> str:
     try:
         if sys.platform == "win32":

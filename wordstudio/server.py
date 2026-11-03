@@ -8,6 +8,7 @@ import json
 import re
 import shutil
 import tempfile
+import threading
 import time
 import zipfile
 from pathlib import Path
@@ -324,8 +325,12 @@ def create_app(urls: Callable[[], dict] | None = None, on_quit: Callable[[], Non
     def media(job_id: str, request: Request):
         job = must_job(job_id)
         d = job_dir(job_id)
-        preview = d / "preview.wav"
-        path = preview if preview.exists() else Path(job["input_path"])
+        src = Path(job["input_path"])
+        path = src
+        if runtime.needs_preview(src):
+            # Older transcripts may not have a seek-accurate copy yet: make it once, on first play.
+            with _preview_lock(job_id):
+                path = runtime.find_preview(d) or runtime.make_preview(src, d) or src
         if not path.exists():
             raise HTTPException(404, "Media missing")
         return _range_response(path, request, MEDIA_TYPES.get(path.suffix.lower(), "application/octet-stream"))
@@ -422,6 +427,15 @@ def create_app(urls: Callable[[], dict] | None = None, on_quit: Callable[[], Non
 
     app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
     return app
+
+
+_preview_locks: dict[str, threading.Lock] = {}
+_preview_locks_guard = threading.Lock()
+
+
+def _preview_lock(job_id: str) -> threading.Lock:
+    with _preview_locks_guard:
+        return _preview_locks.setdefault(job_id, threading.Lock())
 
 
 def _parse_opts(q: dict) -> dict:
