@@ -3,3 +3,8 @@ __pycache__/
 *.pyc
 ui/node_modules/
 .DS_Store
+# Portable app folders (created on the user's PC)
+runtime/
+models/
+data/
+exports/

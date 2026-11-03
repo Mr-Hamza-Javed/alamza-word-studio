@@ -68,6 +68,17 @@ def main(argv: list[str] | None = None) -> None:
     while not _port_free(host, port) and port < 65000:
         port += 1
 
+    # Portable mode: pull in data/models from older installs, and fix auto-start if the folder moved.
+    try:
+        from . import migrate
+
+        if migrate.needed():
+            print("Moving data and models into the app folder...", flush=True)
+            migrate.run()
+    except Exception as exc:
+        print(f"Migration skipped: {exc}", flush=True)
+    autostart.refresh()
+
     local_url = f"http://127.0.0.1:{port}/"
     lan = lan_ip() if host == "0.0.0.0" else None
     lan_url = f"http://{lan}:{port}/" if lan else None
@@ -156,6 +167,10 @@ def main(argv: list[str] | None = None) -> None:
         folder.mkdir(parents=True, exist_ok=True)
         open_path(folder)
 
+    def on_shortcuts(icon=None, item=None):
+        made = autostart.create_shortcuts()
+        notify(APP_NAME, "Shortcuts added to Start Menu and Desktop" if made else "Couldn't create shortcuts")
+
     def on_autostart(icon, item):
         autostart.set_enabled(not autostart.is_enabled())
 
@@ -174,6 +189,7 @@ def main(argv: list[str] | None = None) -> None:
     ]
     if autostart.supported():
         items.append(pystray.MenuItem("Start with Windows", on_autostart, checked=lambda item: autostart.is_enabled()))
+        items.append(pystray.MenuItem("Add Start Menu and Desktop shortcuts", on_shortcuts))
     items.append(pystray.MenuItem("Quit", on_quit))
 
     icon = pystray.Icon("AlamzaWordStudio", image, f"{APP_NAME}\n{local_url}", menu=pystray.Menu(*items))

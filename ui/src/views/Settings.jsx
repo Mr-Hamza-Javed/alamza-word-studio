@@ -69,6 +69,12 @@ export default function Settings({ section }) {
             <Row label="Start with Windows" hint="Runs quietly in the system tray when you sign in.">
               <Toggle checked={settings.start_with_windows} onChange={set("start_with_windows")} disabled={!system?.autostart_supported} />
             </Row>
+            {system?.autostart_supported && (
+              <Row label="Start Menu & Desktop shortcuts" hint={system.shortcuts ? "Shortcuts exist on this PC. Recreate them if you moved the folder." : "Not added on this PC yet (e.g. after copying the folder from another PC)."}>
+                <button className="btn" onClick={() => api.post("/api/shortcuts").then(() => { toast("Shortcuts added", "success"); useStore.getState().loadAll(); }).catch((e) => toast(e.message, "error"))}>
+                  {system.shortcuts ? "Recreate shortcuts" : "Add shortcuts"}</button>
+              </Row>
+            )}
             <Row label="Open browser when the app starts" hint="Turn off if you prefer to open it from the tray icon."><Toggle checked={settings.open_browser_on_start} onChange={set("open_browser_on_start")} /></Row>
             <Row label="Notify when a transcript is ready" hint="Tray and browser notifications.">
               <Toggle checked={settings.notify_on_finish} onChange={(v) => { if (v && "Notification" in window) Notification.requestPermission(); set("notify_on_finish")(v); }} />
@@ -118,7 +124,7 @@ export default function Settings({ section }) {
           </>}
 
           {active === "export" && <>
-            <Row label="Auto-export when finished" hint="Saves the formats below to your output folder automatically."><Toggle checked={settings.auto_export} onChange={set("auto_export")} /></Row>
+            <Row label="Auto-export when finished" hint="Off by default. When on, saves the formats below to the exports folder automatically (the Download button always works)."><Toggle checked={settings.auto_export} onChange={set("auto_export")} /></Row>
             <Row label="Formats" full>
               <div className="fmt-grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" }}>
                 {Object.entries(formats).map(([k, label]) => {
@@ -133,7 +139,7 @@ export default function Settings({ section }) {
             </Row>
             <Row label="Output folder" hint={`Current: ${settings.output_dir_resolved}`}>
               <div className="row">
-                <input className="input" placeholder="Default: Documents\Alamza Word Studio" value={outDir} onChange={(e) => setOutDir(e.target.value)} onBlur={() => outDir !== settings.output_dir && set("output_dir")(outDir)} />
+                <input className="input" placeholder="Default: exports folder inside the app" value={outDir} onChange={(e) => setOutDir(e.target.value)} onBlur={() => outDir !== settings.output_dir && set("output_dir")(outDir)} />
                 <button className="icon-btn" title="Open folder" onClick={() => api.post("/api/open-output")}><FolderOpen /></button>
               </div>
             </Row>
@@ -161,7 +167,10 @@ export default function Settings({ section }) {
             </div>
             <Row label="Computer">{system && <span>{system.cpu}<br /><small className="muted">{system.cores} cores · {fmtBytes(system.ram_total)} RAM · {system.os}</small></span>}</Row>
             <Row label="FFmpeg">{system?.ffmpeg ? <span className="badge success"><CheckCircle2 />Available</span> : <span className="badge danger">Missing (re-run install.bat)</span>}</Row>
-            <Row label="Data folder" hint="Uploaded media, transcripts and settings."><input className="input sm mono" readOnly value={system?.data_dir || ""} /></Row>
+            <Row label="App folder (portable)" hint="Everything lives here: app, models, transcripts and settings. Copy this folder to use it on another PC.">
+              <div className="row"><input className="input sm mono" readOnly value={system?.app_dir || ""} />
+                <button className="icon-btn" title="Open folder" onClick={() => api.post("/api/open-app-folder")}><FolderOpen /></button></div>
+            </Row>
             <Row label="API" hint="Automate transcription from scripts."><a className="btn" href="/api/docs" target="_blank" rel="noreferrer"><ExternalLink />Open API docs</a></Row>
             <Row label="Quit the app" hint="Stops the server and removes the tray icon. Start it again from the Start Menu.">
               <button className="btn danger" onClick={async () => {

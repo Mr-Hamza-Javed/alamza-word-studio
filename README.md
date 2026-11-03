@@ -19,23 +19,41 @@ Runs on a normal CPU (no graphics card needed) and lives quietly in the system t
 
 ## Install (Windows 10/11)
 
-1. Download this repo (green **Code** button → **Download ZIP**) and extract it somewhere permanent, e.g. `C:\Apps\alamza-word-studio`.
+The app is **fully portable**: Python, packages, models, transcripts and settings all live inside its folder.
+
+1. Download this repo (green **Code** button → **Download ZIP**) and extract it somewhere you can write to, e.g. `C:\Apps\alamza-word-studio`, `D:\` or a USB drive (not `Program Files`).
    Or with Git:
    ```bash
    git clone https://github.com/Mr-Hamza-Javed/alamza-word-studio.git
    ```
 2. Double-click **`install.bat`**. It will:
-   - install Python 3.12 if needed (via winget),
-   - create a private environment and install WhisperX (CPU),
-   - set up FFmpeg and the word-alignment data,
-   - download the recommended model (Distil Large v3, ~1.5 GB),
-   - add **Alamza Word Studio** to the Start Menu and Desktop,
-   - ask whether to start with Windows, then launch the app.
-3. The app opens in your browser at **http://127.0.0.1:7865/** and its icon appears in the tray (bottom-right, near the clock; it may be under the `^` arrow).
+   - download a private Python (~10 MB) into `runtime\` (your PC's own Python, if any, is not touched),
+   - install WhisperX (CPU) and the app components into `runtime\`,
+   - download the recommended model (Distil Large v3, ~1.5 GB) and the word aligner into `models\`,
+   - optionally add Start Menu / Desktop shortcuts and start-with-Windows,
+   - launch the app.
+3. The app opens at **http://127.0.0.1:7865/** and its icon appears in the tray (bottom-right, near the clock; it may be under the `^` arrow).
 
-First install needs internet (~2 GB of packages + models). After that everything works offline.
+First setup needs internet. After that everything works offline.
 
-**Update:** run `update.bat`. **Remove:** run `uninstall.bat`.
+### Use it on another PC
+
+Copy the whole folder (USB, network, ZIP) and double-click **`Alamza Word Studio.cmd`**. Nothing is downloaded or installed. To add Start Menu / Desktop shortcuts there, right-click the tray icon → **Add Start Menu and Desktop shortcuts** (or Settings → General).
+
+### Upgrading from the first (non-portable) version
+
+Put the new files into your existing app folder (`git pull`, or extract the new ZIP over it) and run **`install.bat`** once. It **moves** everything you already have into the folder, so nothing is downloaded again and no space is wasted:
+
+- installed packages from `.venv` → `runtime\python` (the old `.venv` is removed),
+- downloaded models from `%USERPROFILE%\.cache\huggingface` and the aligner from `.cache\torch` → `models\`,
+- transcripts and settings from `%LOCALAPPDATA%\AlamzaWordStudio` → `data\`,
+- old auto-exports from `Documents\Alamza Word Studio` → `exports\`,
+- pip's download cache (~1 GB of duplicate installers) is cleared,
+- shortcuts and start-with-Windows are updated to the new location.
+
+Only this app's files are moved; other programs' models stay where they are.
+
+**Update:** run `update.bat`. **Remove:** run `uninstall.bat` (removes shortcuts), then delete the folder.
 
 ## Which model should I use?
 
@@ -55,13 +73,14 @@ Plug in the charger and set Windows power mode to **Best performance**; on batte
 Off by default. To use it, create a free Hugging Face account, open
 [pyannote/speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1) and accept the terms, then create a **Read** token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) and paste it in **Settings → Speakers**.
 
-## Where things are stored
+## Folder layout
 
-| What | Where |
+| Folder | What's inside |
 |---|---|
-| Transcripts, uploads, settings, logs | `%LOCALAPPDATA%\AlamzaWordStudio` |
-| Auto-exported files | `Documents\Alamza Word Studio` (configurable) |
-| Downloaded models | `%USERPROFILE%\.cache\huggingface` |
+| `runtime\` | Private Python, packages, FFmpeg |
+| `models\` | Whisper models, word aligner, speaker models |
+| `data\` | Transcripts, uploaded media, settings, logs |
+| `exports\` | Auto-exported files (auto-export is off by default; the Download button saves through your browser) |
 
 ## For developers
 

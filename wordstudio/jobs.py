@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import multiprocessing as mp
 import shutil
 import sqlite3
@@ -96,6 +97,9 @@ class JobManager:
             except Exception:
                 d[key] = {} if key == "settings" else []
         d.get("settings", {}).pop("hf_token", None)
+        # Media always lives in <data>/jobs/<id>/; resolve it there so a moved/copied app folder keeps working.
+        if d.get("input_path"):
+            d["input_path"] = str(JOBS_DIR / d["id"] / re.split(r"[\\/]", d["input_path"])[-1])
         d["has_preview"] = (JOBS_DIR / d["id"] / "preview.wav").exists()
         d["edited"] = _is_edited(d["id"])
         return d
@@ -144,7 +148,7 @@ class JobManager:
             self._db.execute(
                 "INSERT INTO jobs (id, name, input_path, status, progress, created, model, language, settings, size, warnings) "
                 "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                (job_id, name, str(dest), "queued", 0, time.time(), settings.get("model"), settings.get("language"),
+                (job_id, name, dest.name, "queued", 0, time.time(), settings.get("model"), settings.get("language"),
                  json.dumps(settings), dest.stat().st_size, "[]"))
             self._db.commit()
         job = self.get(job_id)

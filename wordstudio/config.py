@@ -1,40 +1,58 @@
-"""Paths and persistent user settings."""
+"""Paths and persistent user settings.
+
+Everything lives inside the app folder so it can be copied to another PC as-is:
+
+    <app>/runtime/python     private Python + packages (created by install.bat)
+    <app>/runtime/bin        ffmpeg
+    <app>/models             Whisper models, aligner, NLTK data, speaker models
+    <app>/data               transcripts, settings, logs
+    <app>/exports            auto-exported files (only if auto-export is on)
+"""
 
 from __future__ import annotations
 
 import json
 import os
-import sys
 import threading
 from pathlib import Path
-
-from . import APP_ID
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 WEB_DIR = ROOT_DIR / "web"
 ASSETS_DIR = ROOT_DIR / "assets"
+RUNTIME_DIR = ROOT_DIR / "runtime"
+MODELS_DIR = ROOT_DIR / "models"
+EXPORTS_DIR = ROOT_DIR / "exports"
+DATA_DIR = Path(os.environ.get("AWS_DATA_DIR") or ROOT_DIR / "data")
 
-
-def _data_dir() -> Path:
-    override = os.environ.get("AWS_DATA_DIR")
-    if override:
-        return Path(override)
-    if sys.platform == "win32":
-        base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
-        return Path(base) / "AlamzaWordStudio"
-    if sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / "AlamzaWordStudio"
-    return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / APP_ID
-
-
-DATA_DIR = _data_dir()
 JOBS_DIR = DATA_DIR / "jobs"
-BIN_DIR = DATA_DIR / "bin"
 LOG_DIR = DATA_DIR / "logs"
+BIN_DIR = RUNTIME_DIR / "bin"
 DB_PATH = DATA_DIR / "wordstudio.db"
 SETTINGS_PATH = DATA_DIR / "settings.json"
 
-for _d in (DATA_DIR, JOBS_DIR, BIN_DIR, LOG_DIR):
+HF_HOME = MODELS_DIR / "huggingface"
+TORCH_HOME = MODELS_DIR / "torch"
+NLTK_DIR = MODELS_DIR / "nltk_data"
+
+# Where things were stored before the app became portable (used by migrate.py).
+LEGACY_ENV = {k: os.environ.get(k) for k in ("HF_HOME", "HF_HUB_CACHE", "HUGGINGFACE_HUB_CACHE", "TORCH_HOME",
+                                             "NLTK_DATA", "XDG_CACHE_HOME", "LOCALAPPDATA", "APPDATA")}
+
+# Point every library's download cache into the app folder. This must happen before
+# huggingface_hub / torch / nltk are imported, and child processes inherit it.
+os.environ["HF_HOME"] = str(HF_HOME)
+os.environ["HF_HUB_CACHE"] = str(HF_HOME / "hub")
+os.environ.pop("HUGGINGFACE_HUB_CACHE", None)
+os.environ["TORCH_HOME"] = str(TORCH_HOME)
+os.environ["NLTK_DATA"] = str(NLTK_DIR)
+# Small caches other libraries create (font lists, telemetry ids) stay in the folder too.
+CACHE_DIR = RUNTIME_DIR / "cache"
+os.environ["XDG_CACHE_HOME"] = str(CACHE_DIR)
+os.environ["MPLCONFIGDIR"] = str(CACHE_DIR / "matplotlib")
+os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+
+for _d in (DATA_DIR, JOBS_DIR, LOG_DIR, BIN_DIR, CACHE_DIR, HF_HOME / "hub", TORCH_HOME / "hub" / "checkpoints", NLTK_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 
 
@@ -72,8 +90,8 @@ DEFAULT_SETTINGS: dict = {
     "theme": "system",
     "low_confidence_threshold": 0.5,
     "notify_on_finish": True,
-    "auto_export": True,
-    "output_dir": "",  # empty = Documents/Alamza Word Studio
+    "auto_export": False,
+    "output_dir": "",  # empty = <app>/exports
     "keep_models_loaded": True,
 }
 
@@ -84,9 +102,10 @@ def output_dir(settings: dict | None = None) -> Path:
     settings = settings or load_settings()
     custom = (settings.get("output_dir") or "").strip()
     if custom:
-        return Path(custom).expanduser()
-    docs = Path.home() / "Documents"
-    return (docs if docs.exists() else Path.home()) / "Alamza Word Studio"
+        p = Path(custom).expanduser()
+        # Relative paths are relative to the app folder (keeps custom folders portable).
+        return p if p.is_absolute() else ROOT_DIR / p
+    return EXPORTS_DIR
 
 
 def load_settings() -> dict:

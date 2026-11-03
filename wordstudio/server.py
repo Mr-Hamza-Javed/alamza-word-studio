@@ -18,7 +18,8 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 
 from . import APP_NAME, __version__, autostart, catalog, exporters, runtime
-from .config import DATA_DIR, DEFAULT_SETTINGS, JOBS_DIR, LOG_DIR, WEB_DIR, load_settings, output_dir, save_settings
+from .config import (DATA_DIR, DEFAULT_SETTINGS, JOBS_DIR, LOG_DIR, MODELS_DIR, ROOT_DIR, WEB_DIR, load_settings,
+                     output_dir, save_settings)
 from .jobs import Broadcaster, JobManager
 
 MEDIA_TYPES = {
@@ -115,7 +116,8 @@ def create_app(urls: Callable[[], dict] | None = None, on_quit: Callable[[], Non
     @app.get("/api/system")
     def system():
         info = runtime.system_info()
-        info.update({"version": __version__, "app": APP_NAME, "data_dir": str(DATA_DIR),
+        info.update({"version": __version__, "app": APP_NAME, "data_dir": str(DATA_DIR), "app_dir": str(ROOT_DIR),
+                     "models_dir": str(MODELS_DIR), "shortcuts": autostart.shortcuts_exist(),
                      "output_dir": str(output_dir()), "urls": urls() if urls else {},
                      "worker": jobs.worker_status(), "autostart_supported": autostart.supported()})
         return info
@@ -131,6 +133,20 @@ def create_app(urls: Callable[[], dict] | None = None, on_quit: Callable[[], Non
         folder = output_dir()
         folder.mkdir(parents=True, exist_ok=True)
         runtime.open_path(folder)
+        return {"ok": True}
+
+    @app.post("/api/shortcuts")
+    def make_shortcuts():
+        if not autostart.supported():
+            raise HTTPException(400, "Shortcuts are only available on Windows")
+        made = autostart.create_shortcuts()
+        if not made:
+            raise HTTPException(500, "Couldn't create shortcuts")
+        return {"ok": True, "files": made}
+
+    @app.post("/api/open-app-folder")
+    def open_app_folder():
+        runtime.open_path(ROOT_DIR)
         return {"ok": True}
 
     @app.post("/api/unload-models")

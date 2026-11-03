@@ -330,11 +330,14 @@ def _ensure_nltk():
     try:
         import nltk  # type: ignore
 
-        for res in ("punkt_tab", "punkt"):
-            try:
-                nltk.data.find(f"tokenizers/{res}")
-            except LookupError:
-                nltk.download(res, quiet=True)
+        from .config import NLTK_DIR
+
+        if str(NLTK_DIR) not in nltk.data.path:
+            nltk.data.path.insert(0, str(NLTK_DIR))
+        try:
+            nltk.data.find("tokenizers/punkt_tab")
+        except LookupError:
+            nltk.download("punkt_tab", download_dir=str(NLTK_DIR), quiet=True)
     except Exception:
         pass
 
