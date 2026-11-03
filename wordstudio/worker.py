@@ -242,7 +242,8 @@ class Engine:
         aligned = False
         warnings = []
         try:
-            self.stage("align", "Aligning words")
+            self.stage("align", "Aligning words" if _aligner_cached(detected, s.get("align_model", "default"))
+                       else "Downloading word aligner (first time only)")
             model_a, metadata = self.get_align(detected, s.get("align_model", "default"))
             akw = {"return_char_alignments": False, "interpolate_method": "nearest"}
             aligner = _real(whisperx, "alignment", "align")
@@ -325,6 +326,19 @@ class Engine:
         if isinstance(sys.stderr, _ProgressTap):
             sys.stderr.stage = stage
         self.emit({"type": "progress", "stage": stage, "label": label, "stage_pct": 0})
+
+
+def _aligner_cached(language: str, choice: str) -> bool:
+    """English aligners live in the torch cache; other languages come from Hugging Face."""
+    try:
+        from .config import HF_HOME, TORCH_HOME
+
+        if language == "en":
+            name = "wav2vec2_fairseq_large_lv60k_asr_ls960" if choice == "large" else "wav2vec2_fairseq_base_ls960_asr_ls960"
+            return any((TORCH_HOME / "hub" / "checkpoints").glob(name + "*"))
+        return any((HF_HOME / "hub").glob("models--*wav2vec2*"))
+    except Exception:
+        return True
 
 
 def _ensure_nltk():

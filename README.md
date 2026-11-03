@@ -29,12 +29,12 @@ The app is **fully portable**: Python, packages, models, transcripts and setting
 2. Double-click **`install.bat`**. It will:
    - download a private Python (~10 MB) into `runtime\` (your PC's own Python, if any, is not touched),
    - install WhisperX (CPU) and the app components into `runtime\`,
-   - download the recommended model (Distil Large v3, ~1.5 GB) and the word aligner into `models\`,
+   - download only the small **Tiny English** model (~75 MB) into `models\`. Pick and download bigger, more accurate models from the app's **Models** page whenever you need them,
    - optionally add Start Menu / Desktop shortcuts and start-with-Windows,
    - launch the app.
 3. The app opens at **http://127.0.0.1:7865/** and its icon appears in the tray (bottom-right, near the clock; it may be under the `^` arrow).
 
-First setup needs internet. After that everything works offline.
+The first transcription also downloads the word aligner (~360 MB, needed for word-by-word timing) once. After that, and after downloading the models you want, everything works offline.
 
 ### Use it on another PC
 
@@ -49,7 +49,7 @@ On an Intel Core i7 laptop (e.g. i7-1355U, 32 GB RAM) with English audio:
 | Goal | Model | ~Time for 1 hour of audio |
 |---|---|---|
 | Quick draft | `small.en` | 10–20 min |
-| **Best balance (default)** | `distil-large-v3` | 30–50 min |
+| **Best balance (recommended)** | `distil-large-v3` | 30–50 min |
 | Highest accuracy, fewer repeats | `large-v3-turbo` | 40–70 min |
 | Absolute best, slow | `large-v3` | 2–3 h |
 

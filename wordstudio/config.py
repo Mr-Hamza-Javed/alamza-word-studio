@@ -54,7 +54,7 @@ for _d in (DATA_DIR, JOBS_DIR, LOG_DIR, BIN_DIR, CACHE_DIR, HF_HOME / "hub", TOR
 
 DEFAULT_SETTINGS: dict = {
     # Transcription defaults
-    "model": "distil-large-v3",
+    "model": "tiny.en",  # the only model installed by default; others are downloaded from the app
     "language": "en",
     "compute_type": "int8",
     "batch_size": 4,

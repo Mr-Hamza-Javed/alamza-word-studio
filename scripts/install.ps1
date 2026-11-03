@@ -6,11 +6,12 @@
   folder can be copied to another PC and run there without installing anything.
 
   Downloads a private Python (~10 MB) and the packages into runtime\, then the
-  recommended model into models\. Running it again only installs what's missing.
+  small Tiny English model into models\. Other models are downloaded from inside the app
+  when you choose them. Running it again only installs what's missing.
 #>
 param(
   [switch]$Update,          # just make sure packages are installed/up to date
-  [switch]$NoModel,         # skip pre-downloading the recommended model (fresh setup)
+  [switch]$NoModel,         # skip pre-downloading the starter model (fresh setup)
   [switch]$NoLaunch         # don't start the app at the end
 )
 
@@ -124,10 +125,9 @@ Step "Preparing FFmpeg and word-alignment data"
 & $Py -c "import wordstudio, nltk; from wordstudio.config import NLTK_DIR; nltk.download('punkt_tab', download_dir=str(NLTK_DIR), quiet=True); print('    Sentence data ready')"
 
 if ($freshInstall -and -not $NoModel) {
-  Step "Downloading the recommended model (Distil Large v3, ~1.5 GB) and the word aligner"
-  Info "Models also download automatically on first use, so this step is optional."
-  & $Py -c "import wordstudio; from faster_whisper import download_model; download_model('distil-large-v3'); print('    Model ready')"
-  & $Py -c "import wordstudio, torchaudio; torchaudio.pipelines.WAV2VEC2_ASR_BASE_960H.get_model(); print('    Aligner ready')"
+  Step "Downloading the starter model (Tiny English, ~75 MB)"
+  Info "Bigger, more accurate models can be downloaded any time from the Models page in the app."
+  & $Py -c "import wordstudio; from faster_whisper import download_model; download_model('tiny.en'); print('    Model ready')"
 }
 
 # ---------------------------------------------------------------- shortcuts / autostart
