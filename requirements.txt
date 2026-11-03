@@ -1,0 +1,10 @@
+# Alamza Word Studio (CPU). Windows PyPI wheels of torch are CPU-only, which is what we want.
+whisperx>=3.4
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+psutil>=5.9
+pystray>=0.19
+pillow>=10
+imageio-ffmpeg>=0.5
+nltk>=3.8
