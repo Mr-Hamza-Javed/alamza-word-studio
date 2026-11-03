@@ -38,11 +38,33 @@ export function Select({ value, onChange, options, className = "", ...rest }) {
   );
 }
 
-export function NumberInput({ value, onChange, min, max, step = 1, className = "", ...rest }) {
+/**
+ * Number field that only reports valid values inside [min, max]. While typing, partial or
+ * out-of-range input (e.g. "7" on the way to "7865") is kept locally; on blur it is clamped,
+ * or reverted if empty, so an invalid number never reaches settings or the server.
+ */
+export function NumberInput({ value, onChange, min = -Infinity, max = Infinity, step = 1, className = "", ...rest }) {
+  const [draft, setDraft] = useState(value ?? "");
+  useEffect(() => setDraft(value ?? ""), [value]);
+  const valid = (n) => Number.isFinite(n) && n >= min && n <= max;
+  const commit = () => {
+    const n = Number(draft);
+    if (draft === "" || !Number.isFinite(n)) { setDraft(value ?? ""); return; }
+    const c = Math.min(max, Math.max(min, n));
+    setDraft(c);
+    if (c !== value) onChange(c);
+  };
   return (
     <input
-      type="number" className={`input ${className}`} value={value ?? ""} min={min} max={max} step={step}
-      onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))} {...rest}
+      type="number" className={`input ${className}`} value={draft} min={min} max={max} step={step}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        const n = Number(e.target.value);
+        if (e.target.value !== "" && valid(n) && n !== value) onChange(n);
+      }}
+      onBlur={commit}
+      onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+      {...rest}
     />
   );
 }

@@ -41,6 +41,23 @@ export default function App() {
     connectEvents();
   }, []);
 
+  // Files dropped on any other page: don't let the browser open them, send them to Transcribe instead.
+  useEffect(() => {
+    const onTranscribe = () => ["", "#", "#/"].includes(location.hash) || location.hash.startsWith("#/transcribe");
+    const over = (e) => e.preventDefault();
+    const drop = (e) => {
+      e.preventDefault();
+      if (onTranscribe()) return; // the Transcribe page handles it
+      const files = Array.from(e.dataTransfer?.files || []);
+      if (!files.length) return;
+      useStore.setState({ pendingFiles: files });
+      location.hash = "#/transcribe";
+    };
+    window.addEventListener("dragover", over);
+    window.addEventListener("drop", drop);
+    return () => { window.removeEventListener("dragover", over); window.removeEventListener("drop", drop); };
+  }, []);
+
   // Global shortcuts
   useEffect(() => {
     const onKey = (e) => {

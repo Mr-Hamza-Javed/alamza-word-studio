@@ -214,7 +214,7 @@ class Engine:
         _write_peaks(audio, job_dir / "peaks.json", np)
         from .runtime import find_preview, make_preview, needs_preview
 
-        if needs_preview(src) and not find_preview(job_dir):
+        if not find_preview(job_dir) and needs_preview(src, probe=True):
             if not make_preview(src, job_dir):
                 _write_wav(audio, job_dir / "preview.wav", np)
         timings["audio"] = time.time() - t0

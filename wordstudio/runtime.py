@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import platform
+import re
 import shutil
 import socket
 import subprocess
@@ -52,8 +53,33 @@ EXACT_SEEK_EXT = {".wav", ".flac", ".m4a", ".mp4", ".m4v", ".mov", ".webm", ".og
 PREVIEW_NAMES = ("preview.m4a", "preview.wav")
 
 
-def needs_preview(src: Path) -> bool:
-    return Path(src).suffix.lower() not in EXACT_SEEK_EXT
+# Audio codecs Chrome/Edge can decode. Anything else (ALAC in .m4a, AC-3 in .mp4, ADPCM in .wav, ...)
+# would play silently or not at all, so it gets a preview copy too.
+PLAYABLE_CODECS = {"aac", "mp3", "opus", "vorbis", "flac", "pcm_u8", "pcm_s16le", "pcm_s24le", "pcm_s32le",
+                   "pcm_f32le"}
+
+
+def audio_codec(src: Path) -> str | None:
+    """Name of the first audio stream's codec, e.g. 'aac' (None if unknown)."""
+    ffmpeg = ensure_ffmpeg() or "ffmpeg"
+    try:
+        r = subprocess.run([ffmpeg, "-hide_banner", "-i", str(src)], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=30,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        m = re.search(r"Audio:\s*([A-Za-z0-9_]+)", r.stderr or "")
+        return m.group(1).lower() if m else None
+    except Exception:
+        return None
+
+
+def needs_preview(src: Path, probe: bool = False) -> bool:
+    """True if the browser can't play/seek this file accurately. probe=True also checks the codec."""
+    if Path(src).suffix.lower() not in EXACT_SEEK_EXT:
+        return True
+    if probe:
+        codec = audio_codec(src)
+        return codec is not None and codec not in PLAYABLE_CODECS
+    return False
 
 
 def find_preview(job_dir: Path) -> Path | None:

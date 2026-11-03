@@ -14,7 +14,7 @@ import uuid
 from pathlib import Path
 
 from .config import DB_PATH, JOBS_DIR, LOG_DIR
-from .runtime import needs_preview
+from .runtime import find_preview, needs_preview
 
 # Overall progress ranges for each stage.
 _STAGES_PLAIN = {"audio": (0, 3), "model": (3, 10), "transcribe": (10, 78), "align": (78, 97), "finalize": (97, 100)}
@@ -102,7 +102,8 @@ class JobManager:
         if d.get("input_path"):
             d["input_path"] = str(JOBS_DIR / d["id"] / re.split(r"[\\/]", d["input_path"])[-1])
         # True when playback uses an audio-only copy instead of the original file.
-        d["has_preview"] = needs_preview(Path(d.get("input_path") or "x.wav"))
+        d["has_preview"] = (find_preview(JOBS_DIR / d["id"]) is not None
+                            or needs_preview(Path(d.get("input_path") or "x.wav")))
         d["edited"] = _is_edited(d["id"])
         return d
 
@@ -219,6 +220,11 @@ class JobManager:
                 self._conn.send({"type": "unload"})
             except Exception:
                 pass
+
+    def release_models(self):
+        """Stop the idle engine process so no model files stay open."""
+        if self._current is None:
+            self._kill_worker()
 
     def shutdown(self):
         self._running = False

@@ -102,7 +102,6 @@ function DoneEditor({ job }) {
   const [extraSpk, setExtraSpk] = useState([]);
 
   const [playing, setPlaying] = useState(false);
-  const [time, setTime] = useState(0);
   const [rate, setRate] = useState(() => pref("rate", 1));
   const [volume, setVolume] = useState(() => pref("volume", 1));
   const [muted, setMuted] = useState(false);
@@ -138,6 +137,8 @@ function DoneEditor({ job }) {
   loopRef.current = loop;
 
   const isVideo = VIDEO_EXT.includes(fileExt(job.input_path || job.name)) && !job.has_preview;
+  const isVideoRef = useRef(isVideo);
+  isVideoRef.current = isVideo;
 
   // Load transcript + waveform
   useEffect(() => {
@@ -212,6 +213,19 @@ function DoneEditor({ job }) {
     if (saveState === "dirty" || saveState === "error") await save();
   }, [saveState, save]);
 
+  // Leaving the editor (e.g. back to Library) before autosave fired: save right away.
+  const saveStateRef = useRef(saveState);
+  saveStateRef.current = saveState;
+  useEffect(() => () => {
+    const d = docRef.current;
+    if (d && (saveStateRef.current === "dirty" || saveStateRef.current === "error")) {
+      fetch(`/api/jobs/${job.id}/result`, {
+        method: "PUT", keepalive: true, headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ segments: toSave(d.segments), speakers: d.speakers }),
+      }).catch(() => {});
+    }
+  }, [job.id]);
+
   // Autosave shortly after edits.
   useEffect(() => {
     if (saveState !== "dirty") return;
@@ -225,7 +239,8 @@ function DoneEditor({ job }) {
   }, [saveState]);
 
   /* ---------- media ---------- */
-  useEffect(() => { const m = mediaRef.current; if (m) m.playbackRate = rate; setPref("rate", rate); }, [rate, doc]);
+  // Loading a source resets playbackRate to defaultPlaybackRate, so set both.
+  useEffect(() => { const m = mediaRef.current; if (m) { m.defaultPlaybackRate = rate; m.playbackRate = rate; } setPref("rate", rate); }, [rate, doc]);
   useEffect(() => { const m = mediaRef.current; if (m) { m.volume = volume; m.muted = muted; } setPref("volume", volume); }, [volume, muted, doc]);
   useEffect(() => setPref("follow", follow), [follow]);
   useEffect(() => setPref("readAlong", readAlong), [readAlong]);
@@ -283,7 +298,7 @@ function DoneEditor({ job }) {
         segEls.current[si]?.querySelectorAll(".w").forEach((e, k) => e.classList.toggle("past", curWi >= 0 && k < curWi));
       }
       lastIdx = idx;
-      setCaptionIdx(idx);
+      if (isVideoRef.current) setCaptionIdx(idx);
       // Follow playback
       const el = idx >= 0 ? els[idx] : null;
       const wrap = wrapRef.current;
@@ -335,7 +350,7 @@ function DoneEditor({ job }) {
   /* ---------- word clicks ---------- */
   const onTranscriptClick = (e) => {
     const el = e.target.closest(".w");
-    if (!el) return;
+    if (!el) { if (!e.target.closest(".word-editor")) setPopover(null); return; }
     const fi = Number(el.dataset.fi), si = Number(el.dataset.si), wi = Number(el.dataset.wi);
     if (editing) {
       const wr = wrapRef.current.getBoundingClientRect(), r = el.getBoundingClientRect();
@@ -363,10 +378,14 @@ function DoneEditor({ job }) {
     }
   };
 
+  const onSeekPlay = useCallback((t) => seek(t, true), [seek]);
+  const changeSpeakerRef = useRef(null);
+  const onSpeakerChange = useCallback((si, spk) => changeSpeakerRef.current(si, spk), []);
   const changeSpeaker = (si, spk) => {
     if (spk === "__new") spk = addSpeaker();
     commit(setSegmentSpeaker(segments, si, spk || null));
   };
+  changeSpeakerRef.current = changeSpeaker;
   const addSpeaker = () => {
     let n = 0;
     while (order.includes(`SPEAKER_${String(n).padStart(2, "0")}`)) n++;
@@ -430,14 +449,15 @@ function DoneEditor({ job }) {
         case "ArrowRight": e.preventDefault(); seek(t + 1); break;
         case "ArrowUp": case "ArrowDown": {
           e.preventDefault();
-          const si = segmentAt(segments, t);
+          const startOf = (s) => s.words[0]?.start ?? s.start ?? 0;
+          // Segment we're in (or the last one that started before now).
+          let cur = -1;
+          for (let i = 0; i < segments.length && startOf(segments[i]) <= t + 0.05; i++) cur = i;
           let target;
-          if (e.key === "ArrowDown") target = segments.find((s) => (s.words[0]?.start ?? s.start) > t + 0.05);
-          else {
-            const cur = si >= 0 ? si : segments.findIndex((s) => (s.words[0]?.start ?? s.start) > t) - 1;
-            target = segments[Math.max(0, (cur >= 0 ? cur : segments.length) - 1)];
-          }
-          if (target) { seek(target.words[0]?.start ?? target.start); userScrollAt.current = 0; }
+          if (e.key === "ArrowDown") target = segments[cur + 1];
+          else if (cur >= 0 && t - startOf(segments[cur]) > 1) target = segments[cur]; // back to start of this one
+          else target = segments[Math.max(0, cur - 1)];
+          if (target) seek(startOf(target));
           break;
         }
         case "[": setRate((r) => RATES[Math.max(0, RATES.indexOf(r) - 1)] ?? 1); break;
@@ -464,7 +484,6 @@ function DoneEditor({ job }) {
   const mediaProps = {
     ref: mediaRef, src: mediaSrc, preload: "auto",
     onPlay: () => setPlaying(true), onPause: () => setPlaying(false), onEnded: () => setPlaying(false),
-    onTimeUpdate: (e) => setTime(e.currentTarget.currentTime), onSeeked: (e) => setTime(e.currentTarget.currentTime),
     onError: () => toast("This media format can't play in the browser. The transcript still works.", "error"),
   };
 
@@ -518,10 +537,10 @@ function DoneEditor({ job }) {
         <div className="player-main">
           {peaks ? <Waveform peaks={peaks.peaks} duration={duration} mediaRef={mediaRef} segments={segments} order={order} loop={loop} /> : <div className="wave" />}
           <div className="controls">
-            <button className="icon-btn" title="Back 5s (J)" onClick={() => seek(time - 5)}><RotateCcw /></button>
+            <button className="icon-btn" title="Back 5s (J)" onClick={() => seek((mediaRef.current?.currentTime || 0) - 5)}><RotateCcw /></button>
             <button className="icon-btn play" title="Play/Pause (Space)" onClick={toggle}>{playing ? <Pause /> : <Play />}</button>
-            <button className="icon-btn" title="Forward 5s (L)" onClick={() => seek(time + 5)}><RotateCw /></button>
-            <span className="time"><b>{fmtTime(time, true)}</b> / {fmtTime(duration)}</span>
+            <button className="icon-btn" title="Forward 5s (L)" onClick={() => seek((mediaRef.current?.currentTime || 0) + 5)}><RotateCw /></button>
+            <TimeDisplay mediaRef={mediaRef} duration={duration} />
             <div className="grow" />
             <button className={`icon-btn ${follow ? "active" : ""}`} title="Follow playback (F)" onClick={() => setFollow(!follow)}><Crosshair /></button>
             <button className={`icon-btn ${readAlong ? "active" : ""}`} title="Read-along: dim words not yet spoken" onClick={() => setReadAlong(!readAlong)}><Type /></button>
@@ -539,7 +558,8 @@ function DoneEditor({ job }) {
 
       {/* Body */}
       <div className={`ed-body ${panel ? "" : "panel-closed"}`}>
-        <div className="transcript-wrap" ref={wrapRef} onWheel={() => (userScrollAt.current = Date.now())} onClick={onTranscriptClick}>
+        <div className="transcript-wrap" ref={wrapRef} onWheel={() => (userScrollAt.current = Date.now())}
+          onPointerDown={(e) => { if (e.target === e.currentTarget) userScrollAt.current = Date.now(); }} onClick={onTranscriptClick}>
           <div className="tr-tools" onClick={(e) => e.stopPropagation()}>
             <div className="search-box">
               <div className="input-icon"><Search />
@@ -569,7 +589,7 @@ function DoneEditor({ job }) {
           </div>
 
           <Transcript segments={segments} order={order} names={names} editing={editing} lowThreshold={lowThreshold}
-            showConfidence={showConf} readAlong={readAlong} onSeek={(t) => seek(t, true)} onSpeakerChange={changeSpeaker} />
+            showConfidence={showConf} readAlong={readAlong} onSeek={onSeekPlay} onSpeakerChange={onSpeakerChange} />
 
           {popover && (
             <WordPopover
@@ -591,6 +611,19 @@ function DoneEditor({ job }) {
       {rerun && <RerunModal job={job} onClose={() => setRerun(false)} />}
     </div>
   );
+}
+
+/** Current time, updated from the media element itself so the editor doesn't re-render while playing. */
+function TimeDisplay({ mediaRef, duration }) {
+  const [t, setT] = useState(0);
+  useEffect(() => {
+    const m = mediaRef.current;
+    if (!m) return;
+    const on = () => setT(m.currentTime);
+    ["timeupdate", "seeked", "loadedmetadata"].forEach((ev) => m.addEventListener(ev, on));
+    return () => ["timeupdate", "seeked", "loadedmetadata"].forEach((ev) => m.removeEventListener(ev, on));
+  }, [mediaRef]);
+  return <span className="time"><b>{fmtTime(t, true)}</b> / {fmtTime(duration)}</span>;
 }
 
 /** Subtitle-sized slice of a segment around the current word (max ~2 lines). */

@@ -9,6 +9,8 @@ function cssVar(name) {
  * Canvas waveform with playhead, hover time, click-to-seek, speaker lanes and Ctrl+wheel zoom.
  * Redraws itself every animation frame while the media plays.
  */
+const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
 export default function Waveform({ peaks, duration, mediaRef, segments, order, loop }) {
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
@@ -32,7 +34,8 @@ export default function Waveform({ peaks, duration, mediaRef, segments, order, l
       if (v.zoom > 1 && media && !media.paused && (t < v.start || t > v.start + span * 0.85)) {
         v.start = Math.max(0, Math.min(duration - span, t - span * 0.15));
       }
-      const theme = document.documentElement.dataset.theme || "";
+      // Explicit theme, or the OS setting when following the system.
+      const theme = document.documentElement.dataset.theme || (darkQuery.matches ? "sys-dark" : "sys-light");
       if (Math.abs(t - lastT) < 0.01 && w === lastW && v.zoom === lastZoom && v.start === lastStart && theme === lastTheme && !draw.force) return;
       draw.force = false;
       lastT = t; lastW = w; lastZoom = v.zoom; lastStart = v.start; lastTheme = theme;

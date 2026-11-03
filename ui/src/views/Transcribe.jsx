@@ -39,6 +39,12 @@ export default function Transcribe() {
   const [uploading, setUploading] = useState(null);
   const inputRef = useRef(null);
 
+  // Files dropped on another page arrive here.
+  useEffect(() => {
+    const pending = useStore.getState().pendingFiles;
+    if (pending?.length) { useStore.setState({ pendingFiles: null }); addFiles(pending); }
+  }, []);
+
   // Allow dropping files anywhere on the page.
   useEffect(() => {
     const prevent = (e) => { e.preventDefault(); };

@@ -126,7 +126,8 @@ def create_app(urls: Callable[[], dict] | None = None, on_quit: Callable[[], Non
     @app.post("/api/quit")
     def quit_app():
         if on_quit:
-            asyncio.get_event_loop().call_later(0.4, on_quit)
+            # Reply first, then shut down (this handler runs in a worker thread, not the event loop).
+            threading.Timer(0.4, on_quit).start()
         return {"ok": True}
 
     @app.post("/api/open-output")
@@ -202,8 +203,15 @@ def create_app(urls: Callable[[], dict] | None = None, on_quit: Callable[[], Non
     def delete_model(model_id: str):
         if model_id not in catalog.MODEL_IDS:
             raise HTTPException(404, "Unknown model")
-        jobs.unload_models()
-        return {"ok": catalog.delete(model_id)}
+        busy = jobs.get(jobs.worker_status()["current"] or "")
+        if busy and busy.get("model") == model_id:
+            raise HTTPException(409, "This model is being used by a running transcription. Try again when it finishes.")
+        # Windows can't delete files a process still has open: stop the engine so the model is released.
+        jobs.release_models()
+        catalog.delete(model_id)
+        if catalog.is_downloaded(model_id):
+            raise HTTPException(500, "Couldn't delete all model files. Close the app and try again.")
+        return {"ok": True}
 
     # ---------------- jobs ----------------
     @app.get("/api/jobs")
@@ -221,6 +229,7 @@ def create_app(urls: Callable[[], dict] | None = None, on_quit: Callable[[], Non
         job_settings.update({k: v for k, v in overrides.items() if k in JOB_SETTING_KEYS})
         if job_settings["model"] not in catalog.MODEL_IDS:
             raise HTTPException(400, "Unknown model")
+        job_settings = _clean_job_settings(job_settings, base)
         tmp_dir = DATA_DIR / "tmp"
         tmp_dir.mkdir(exist_ok=True)
         created = []
@@ -255,6 +264,11 @@ def create_app(urls: Callable[[], dict] | None = None, on_quit: Callable[[], Non
         except Exception:
             body = {}
         overrides = {k: v for k, v in (body or {}).items() if k in JOB_SETTING_KEYS}
+        if "model" in overrides and overrides["model"] not in catalog.MODEL_IDS:
+            raise HTTPException(400, "Unknown model")
+        if overrides:
+            overrides = _clean_job_settings({**load_settings(), **jobs.get(job_id)["settings"], **overrides}, load_settings())
+            overrides = {k: v for k, v in overrides.items() if k in JOB_SETTING_KEYS}
         return jobs.retry(job_id, overrides)
 
     @app.post("/api/jobs/{job_id}/rename")
@@ -310,9 +324,12 @@ def create_app(urls: Callable[[], dict] | None = None, on_quit: Callable[[], Non
         d = job_dir(job_id)
         if not (d / "original.json").exists():
             raise HTTPException(404, "No original")
-        shutil.copyfile(d / "original.json", d / "result.json")
-        jobs._update(job_id)
-        return load_result(job_id)
+        # copy2 keeps the original's timestamp, so the job no longer counts as edited.
+        shutil.copy2(d / "original.json", d / "result.json")
+        result = load_result(job_id)
+        jobs.set_word_count(job_id, sum(len(s.get("words") or []) or len(str(s.get("text", "")).split())
+                                        for s in result.get("segments", [])))
+        return result
 
     @app.get("/api/jobs/{job_id}/peaks")
     def peaks(job_id: str):
@@ -326,11 +343,17 @@ def create_app(urls: Callable[[], dict] | None = None, on_quit: Callable[[], Non
         job = must_job(job_id)
         d = job_dir(job_id)
         src = Path(job["input_path"])
-        path = src
-        if runtime.needs_preview(src):
-            # Older transcripts may not have a seek-accurate copy yet: make it once, on first play.
+        path = runtime.find_preview(d)
+        if path is None and not (d / ".playable").exists():
+            # Older transcripts may not have a playable, seek-accurate copy yet: check once, make it if needed.
             with _preview_lock(job_id):
-                path = runtime.find_preview(d) or runtime.make_preview(src, d) or src
+                path = runtime.find_preview(d)
+                if path is None:
+                    if runtime.needs_preview(src, probe=True):
+                        path = runtime.make_preview(src, d)
+                    else:
+                        (d / ".playable").touch()
+        path = path or src
         if not path.exists():
             raise HTTPException(404, "Media missing")
         return _range_response(path, request, MEDIA_TYPES.get(path.suffix.lower(), "application/octet-stream"))
@@ -436,6 +459,34 @@ _preview_locks_guard = threading.Lock()
 def _preview_lock(job_id: str) -> threading.Lock:
     with _preview_locks_guard:
         return _preview_locks.setdefault(job_id, threading.Lock())
+
+
+# (type, min, max) for numeric job settings; bad values fall back to the saved default.
+_NUMERIC = {"batch_size": (int, 1, 64), "threads": (int, 0, 256), "beam_size": (int, 1, 10),
+            "vad_onset": (float, 0.01, 0.99), "vad_offset": (float, 0.01, 0.99), "chunk_size": (int, 1, 30),
+            "min_speakers": (int, 0, 50), "max_speakers": (int, 0, 50)}
+
+
+def _clean_job_settings(s: dict, defaults: dict) -> dict:
+    out = dict(s)
+    for key, (typ, lo, hi) in _NUMERIC.items():
+        try:
+            out[key] = min(hi, max(lo, typ(out.get(key))))
+        except (TypeError, ValueError):
+            out[key] = defaults.get(key, DEFAULT_SETTINGS[key])
+    for key in ("diarize", "keep_models_loaded"):
+        out[key] = bool(out.get(key))
+    for key in ("initial_prompt", "hotwords"):
+        out[key] = str(out.get(key) or "")[:2000]
+    if out["min_speakers"] and out["max_speakers"] and out["min_speakers"] > out["max_speakers"]:
+        out["min_speakers"], out["max_speakers"] = out["max_speakers"], out["min_speakers"]
+    if out.get("compute_type") not in ("int8", "int8_float32", "float32"):
+        out["compute_type"] = "int8"
+    if out.get("align_model") not in catalog.ALIGN_MODELS:
+        out["align_model"] = "default"
+    if out.get("language") not in catalog.LANGUAGES:
+        out["language"] = defaults.get("language", "en")
+    return out
 
 
 def _parse_opts(q: dict) -> dict:

@@ -98,16 +98,26 @@ def _repo_dir(repo: str) -> Path:
 
 
 def _dir_size(path: Path) -> int:
+    """Real bytes on disk for a cached model.
+
+    With symlinks (Linux/macOS, or Windows in Developer Mode) the data is in blobs/ and snapshots/
+    only holds links. Without symlinks (most Windows PCs) the files sit directly in snapshots/ and
+    blobs/ is empty. Counting every regular file once (skipping links) is right in both cases.
+    """
     total = 0
+    seen = set()
     if not path.exists():
         return 0
-    # blobs hold the real data; snapshots are links.
-    blobs = path / "blobs"
-    target = blobs if blobs.exists() else path
-    for f in target.rglob("*"):
+    for f in path.rglob("*"):
         try:
-            if f.is_file() and not f.is_symlink():
-                total += f.stat().st_size
+            if f.is_symlink() or not f.is_file():
+                continue
+            st = f.stat()
+            key = (st.st_dev, st.st_ino) if st.st_ino else str(f)
+            if key in seen:  # hard links
+                continue
+            seen.add(key)
+            total += st.st_size
         except OSError:
             pass
     return total

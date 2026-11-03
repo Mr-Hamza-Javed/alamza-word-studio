@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Copy, Download, FolderDown, Info, Users, FileOutput, RotateCcw, RotateCw, FolderOpen, AlertTriangle, Plus } from "lucide-react";
 import { api, downloadBlob } from "../../lib/api";
 import { toast, useStore } from "../../lib/store";
-import { fmtDate, fmtDuration, speakerColor, speakerLabel } from "../../lib/format";
+import { copyText, fmtDate, fmtDuration, speakerColor, speakerLabel } from "../../lib/format";
 import { Field, NumberInput, Progress, Toggle, confirmDialog } from "../../components/ui";
 import { speakerStats } from "./model";
 
@@ -73,7 +73,7 @@ function ExportTab({ job, ensureSaved, hasSpeakers, version, dirty }) {
   async function copyText() {
     await ensureSaved();
     const txt = await api.get(`/api/jobs/${job.id}/export/txt?inline=1&${qs}`);
-    await navigator.clipboard.writeText(txt);
+    await copyText(txt);
     toast("Transcript copied to clipboard", "success", { duration: 1800 });
   }
 
@@ -99,9 +99,9 @@ function ExportTab({ job, ensureSaved, hasSpeakers, version, dirty }) {
       <div>
         <div className="section-title">Subtitle layout</div>
         <div className="grid-3" style={{ gap: 8 }}>
-          <Field label="Chars/line"><NumberInput className="sm" value={opts.max_chars_per_line} min={10} max={120} onChange={(v) => v && set("max_chars_per_line")(v)} /></Field>
-          <Field label="Lines"><NumberInput className="sm" value={opts.max_lines} min={1} max={4} onChange={(v) => v && set("max_lines")(v)} /></Field>
-          <Field label="Max sec"><NumberInput className="sm" value={opts.max_cue_duration} min={1} max={20} step={0.5} onChange={(v) => v && set("max_cue_duration")(v)} /></Field>
+          <Field label="Chars/line"><NumberInput className="sm" value={opts.max_chars_per_line} min={10} max={120} onChange={set("max_chars_per_line")} /></Field>
+          <Field label="Lines"><NumberInput className="sm" value={opts.max_lines} min={1} max={4} onChange={set("max_lines")} /></Field>
+          <Field label="Max sec"><NumberInput className="sm" value={opts.max_cue_duration} min={1} max={20} step={0.5} onChange={set("max_cue_duration")} /></Field>
         </div>
         <div className="col" style={{ marginTop: 10, gap: 8 }}>
           {hasSpeakers && <Toggle checked={opts.include_speaker_labels} onChange={set("include_speaker_labels")} label="Speaker names" />}

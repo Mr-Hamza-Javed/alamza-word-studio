@@ -66,3 +66,17 @@ export function estimateSeconds(model, audioSeconds, cores) {
 export const fileExt = (name) => (name.match(/\.[^.]+$/)?.[0] || "").toLowerCase();
 export const VIDEO_EXT = [".mp4", ".m4v", ".mov", ".webm"];
 export const MEDIA_ACCEPT = "audio/*,video/*,.mp3,.wav,.m4a,.flac,.ogg,.opus,.aac,.wma,.mp4,.mkv,.mov,.avi,.webm,.m4v,.wmv,.flv,.amr,.3gp";
+
+/** Copy text. Falls back to a hidden textarea where the Clipboard API isn't available (http on LAN). */
+export async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) return await navigator.clipboard.writeText(text);
+  } catch {}
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.cssText = "position:fixed;opacity:0;left:-9999px";
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand("copy");
+  ta.remove();
+}

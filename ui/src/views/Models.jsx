@@ -27,7 +27,7 @@ export default function Models() {
     toast(`Downloading ${m.label}…`, "info");
   }
   async function remove(m) {
-    const ok = await confirmDialog({ title: `Delete ${m.label}?`, message: `Frees ${fmtBytes(m.disk_bytes)}. You can download it again any time.`, danger: true, confirmLabel: "Delete" });
+    const ok = await confirmDialog({ title: `Delete ${m.label}?`, message: `Frees ${m.disk_bytes ? fmtBytes(m.disk_bytes) : `about ${m.size_mb >= 1000 ? (m.size_mb / 1024).toFixed(1) + " GB" : m.size_mb + " MB"}`}. You can download it again any time.`, danger: true, confirmLabel: "Delete" });
     if (!ok) return;
     await api.del(`/api/models/${m.id}`);
     useStore.getState().refreshModels();

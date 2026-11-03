@@ -3,7 +3,7 @@ import { AppWindow, FileOutput, Gauge, Info, KeyRound, Mic, Power, Users, Folder
 import { api } from "../lib/api";
 import { toast, useStore } from "../lib/store";
 import { applyTheme } from "../lib/theme";
-import { fmtBytes } from "../lib/format";
+import { copyText, fmtBytes } from "../lib/format";
 import { confirmDialog, NumberInput, Segmented, Select, Toggle } from "../components/ui";
 
 const SECTIONS = [
@@ -45,7 +45,7 @@ export default function Settings({ section }) {
   };
   const set = (k) => (v) => save({ [k]: v });
   const urls = system?.urls || {};
-  const copy = (t) => navigator.clipboard?.writeText(t).then(() => toast("Link copied", "success", { duration: 1500 }));
+  const copy = (t) => copyText(t).then(() => toast("Link copied", "success", { duration: 1500 }));
 
   return (
     <div className="page">
@@ -83,7 +83,7 @@ export default function Settings({ section }) {
               <Toggle checked={settings.lan_access} onChange={set("lan_access")} />
             </Row>
             <Row label="Port" hint="Takes effect after restarting the app.">
-              <NumberInput value={settings.port} min={1024} max={65000} onChange={(v) => v && set("port")(v)} />
+              <NumberInput value={settings.port} min={1024} max={65000} onChange={set("port")} />
             </Row>
           </>}
 
@@ -98,8 +98,12 @@ export default function Settings({ section }) {
             </Row>
             <Row label="Low-confidence highlight" hint="Words below this score are underlined in the editor so you can check them.">
               <div className="row"><input type="range" className="range" min={0} max={0.95} step={0.05} value={settings.low_confidence_threshold}
-                onChange={(e) => useStore.setState({ settings: { ...settings, low_confidence_threshold: Number(e.target.value) } })}
-                onMouseUp={(e) => set("low_confidence_threshold")(Number(e.target.value))} /><span className="mono" style={{ width: 40 }}>{Math.round(settings.low_confidence_threshold * 100)}%</span></div>
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  useStore.setState({ settings: { ...settings, low_confidence_threshold: v } });
+                  clearTimeout(window.__awsConfT);
+                  window.__awsConfT = setTimeout(() => set("low_confidence_threshold")(v), 400);
+                }} /><span className="mono" style={{ width: 40 }}>{Math.round(settings.low_confidence_threshold * 100)}%</span></div>
             </Row>
           </>}
 
@@ -143,17 +147,17 @@ export default function Settings({ section }) {
                 <button className="icon-btn" title="Open folder" onClick={() => api.post("/api/open-output")}><FolderOpen /></button>
               </div>
             </Row>
-            <Row label="Max characters per subtitle line"><NumberInput value={settings.max_chars_per_line} min={10} max={120} onChange={(v) => v && set("max_chars_per_line")(v)} /></Row>
-            <Row label="Max lines per subtitle"><NumberInput value={settings.max_lines} min={1} max={4} onChange={(v) => v && set("max_lines")(v)} /></Row>
-            <Row label="Max subtitle duration (seconds)"><NumberInput value={settings.max_cue_duration} min={1} max={20} step={0.5} onChange={(v) => v && set("max_cue_duration")(v)} /></Row>
+            <Row label="Max characters per subtitle line"><NumberInput value={settings.max_chars_per_line} min={10} max={120} onChange={set("max_chars_per_line")} /></Row>
+            <Row label="Max lines per subtitle"><NumberInput value={settings.max_lines} min={1} max={4} onChange={set("max_lines")} /></Row>
+            <Row label="Max subtitle duration (seconds)"><NumberInput value={settings.max_cue_duration} min={1} max={20} step={0.5} onChange={set("max_cue_duration")} /></Row>
             <Row label="New subtitle when the speaker changes"><Toggle checked={settings.split_on_speaker} onChange={set("split_on_speaker")} /></Row>
             <Row label="Include speaker names"><Toggle checked={settings.include_speaker_labels} onChange={set("include_speaker_labels")} /></Row>
             <Row label="Timestamps in TXT"><Toggle checked={settings.txt_timestamps} onChange={set("txt_timestamps")} /></Row>
           </>}
 
           {active === "performance" && <>
-            <Row label="CPU threads" hint={`0 = auto (uses ${system?.cores} physical cores)`}><NumberInput value={settings.threads} min={0} max={system?.threads || 64} onChange={(v) => v !== "" && set("threads")(v)} /></Row>
-            <Row label="Batch size" hint="4 is a good default on laptops. Higher is faster but uses more RAM."><NumberInput value={settings.batch_size} min={1} max={32} onChange={(v) => v && set("batch_size")(v)} /></Row>
+            <Row label="CPU threads" hint={`0 = auto (uses ${system?.cores} physical cores)`}><NumberInput value={settings.threads} min={0} max={system?.threads || 64} onChange={set("threads")} /></Row>
+            <Row label="Batch size" hint="4 is a good default on laptops. Higher is faster but uses more RAM."><NumberInput value={settings.batch_size} min={1} max={32} onChange={set("batch_size")} /></Row>
             <Row label="Precision"><Select value={settings.compute_type} onChange={set("compute_type")} options={[{ value: "int8", label: "int8 (fastest, recommended)" }, { value: "int8_float32", label: "int8 / float32" }, { value: "float32", label: "float32 (slowest)" }]} /></Row>
             <Row label="Keep models in memory" hint="Faster when transcribing several files. Uses 2–7 GB RAM while loaded."><Toggle checked={settings.keep_models_loaded} onChange={set("keep_models_loaded")} /></Row>
             <Row label="Free memory now" hint="Unloads models until the next transcription."><button className="btn" onClick={() => api.post("/api/unload-models").then(() => toast("Models unloaded", "success"))}>Unload models</button></Row>
